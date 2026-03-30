@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Omni Sound Maker | badag007</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #09090b; color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; min-height: 100vh; justify-content: center; margin: 0; }
+        .container { background: #18181b; padding: 30px; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.9); width: 100%; max-width: 420px; text-align: center; border-top: 4px solid #ec4899; }
+        h2 { color: #ec4899; margin-top: 0; margin-bottom: 5px; font-size: 24px; font-weight: 900; letter-spacing: 0.5px; }
+        .subtitle { font-size: 13px; color: #a1a1aa; margin-bottom: 25px; }
+        
+        .upload-area { border: 2px dashed #3f3f46; padding: 25px 15px; border-radius: 12px; margin-bottom: 20px; cursor: pointer; background: #27272a; transition: 0.3s; }
+        .upload-area:hover { border-color: #ec4899; background: #3f3f46; }
+        input[type="file"] { display: none; }
+        #info-upload { margin: 0; font-size: 15px; font-weight: 500; color: #d4d4d8; }
+        
+        .control-group { text-align: left; margin-bottom: 20px; background: #27272a; padding: 15px; border-radius: 10px; border: 1px solid #3f3f46; }
+        .control-group label { display: flex; justify-content: space-between; font-size: 13px; font-weight: bold; color: #e4e4e7; margin-bottom: 10px; }
+        input[type=range] { width: 100%; accent-color: #ec4899; cursor: pointer; }
+        
+        button { padding: 14px; border: none; border-radius: 8px; background: #ec4899; color: white; font-weight: bold; cursor: pointer; width: 100%; font-size: 15px; transition: 0.2s; box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3); }
+        button:disabled { background: #3f3f46; color: #a1a1aa; cursor: not-allowed; box-shadow: none; }
+        button:not(:disabled):hover { background: #db2777; }
+        button:not(:disabled):active { transform: scale(0.98); }
+        
+        #loading { display: none; margin: 15px 0; color: #22d3ee; font-size: 14px; font-weight: bold; animation: pulse 1s infinite alternate; }
+        @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+
+        #result-area { display: none; margin-top: 20px; }
+        audio { width: 100%; height: 40px; outline: none; margin-bottom: 15px; border-radius: 8px; }
+
+        .dl-btn { background: #10b981; text-decoration: none; display: block; padding: 12px; border-radius: 8px; color: white; font-weight: bold; font-size: 15px; width: 100%; box-sizing: border-box; transition: 0.2s; text-align: center; }
+        .dl-btn:hover { background: #059669; }
+
+        .saweria-btn { background: #faae2b; text-decoration: none; display: block; padding: 12px; border-radius: 8px; color: #09090b; margin-top: 25px; font-weight: 900; font-size: 14px; width: 100%; box-sizing: border-box; transition: 0.2s; border: 2px solid #e09922; text-align: center; }
+        .saweria-btn:hover { background: #ffbd4a; transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Aesthetic Sound Maker</h2>
+    <div class="subtitle">Sped Up, Slowed, & Reverb Generator</div>
+
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p id="info-upload">🎵 Pilih Lagu (MP3/WAV)</p>
+        <input type="file" id="fileInput" accept="audio/*" onchange="fileSelected(this)">
+    </div>
+
+    <div class="control-group">
+        <label>
+            <span>Kecepatan & Pitch (Sped Up)</span>
+            <span id="speed-val">1.2x</span>
+        </label>
+        <input type="range" id="speed-slider" min="0.5" max="2.0" step="0.05" value="1.2" oninput="document.getElementById('speed-val').innerText = this.value + 'x'">
+        
+        <label style="margin-top: 15px;">
+            <span>Efek Gema (Reverb Room)</span>
+            <span id="reverb-val">50%</span>
+        </label>
+        <input type="range" id="reverb-slider" min="0" max="100" step="5" value="50" oninput="document.getElementById('reverb-val').innerText = this.value + '%'">
+    </div>
+
+    <button onclick="processAudio()" id="btn-process" disabled>Generate Sound Sekarang</button>
+    
+    <div id="loading">⏳ Meracik sound aesthetic...</div>
+
+    <div id="result-area">
+        <audio id="audio-player" controls></audio>
+        <a id="download-link" class="dl-btn" href="#" download="aesthetic-sound.wav">⬇️ Download Audio (.WAV)</a>
+    </div>
+
+    <a href="https://saweria.co/badag007" target="_blank" class="saweria-btn">☕ Support badag007 di Saweria</a>
+</div>
+
+<script>
+    let audioContext;
+
+    function fileSelected(input) {
+        if (input.files && input.files[0]) {
+            let fileName = input.files[0].name;
+            if(fileName.length > 25) fileName = fileName.substring(0, 22) + '...';
+            document.getElementById('info-upload').innerText = '📁 ' + fileName;
+            document.getElementById('btn-process').disabled = false;
+            document.getElementById('result-area').style.display = 'none';
+        }
+    }
+
+    // Fungsi bikin simulasi ruangan pantulan (Reverb) buatan
+    function createReverbBuffer(context, duration, decay) {
+        const sampleRate = context.sampleRate;
+        const length = sampleRate * duration;
+        const impulse = context.createBuffer(2, length, sampleRate);
+        const left = impulse.getChannelData(0);
+        const right = impulse.getChannelData(1);
+
+        for (let i = 0; i < length; i++) {
+            const multiplier = Math.pow(1 - i / length, decay);
+            left[i] = (Math.random() * 2 - 1) * multiplier;
+            right[i] = (Math.random() * 2 - 1) * multiplier;
+        }
+        return impulse;
+    }
+
+    async function processAudio() {
+        const fileInput = document.getElementById('fileInput');
+        const btnProcess = document.getElementById('btn-process');
+        const loadingDiv = document.getElementById('loading');
+        
+        if (!fileInput.files[0]) return;
+
+        btnProcess.disabled = true;
+        loadingDiv.style.display = "block";
+        document.getElementById('result-area').style.display = 'none';
+
+        try {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const arrayBuffer = await fileInput.files[0].arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            
+            const speedRate = parseFloat(document.getElementById('speed-slider').value);
+            const reverbLevel = parseFloat(document.getElementById('reverb-slider').value) / 100;
+            
+            // Hitung durasi baru setelah lagunya dicepetin/dilambatin, ditambah sisa buntut gema (tail)
+            const newDuration = (audioBuffer.duration / speedRate) + 3.0; 
+
+            const offlineCtx = new OfflineAudioContext(
+                audioBuffer.numberOfChannels, 
+                newDuration * audioBuffer.sampleRate, 
+                audioBuffer.sampleRate
+            );
+            
+            const source = offlineCtx.createBufferSource();
+            source.buffer = audioBuffer;
+            source.playbackRate.value = speedRate; 
+
+            // Bikin efek Reverb (Convolver)
+            const convolver = offlineCtx.createConvolver();
+            convolver.buffer = createReverbBuffer(offlineCtx, 3.0, 2.0); 
+
+            // Atur seberapa basah (gema) dan kering (suara asli) audionya
+            const dryGain = offlineCtx.createGain();
+            const wetGain = offlineCtx.createGain();
+            
+            dryGain.gain.value = 1 - (reverbLevel * 0.5); 
+            wetGain.gain.value = reverbLevel;
+
+            // Routing Audio
+            source.connect(dryGain);
+            source.connect(convolver);
+            convolver.connect(wetGain);
+            
+            dryGain.connect(offlineCtx.destination);
+            wetGain.connect(offlineCtx.destination);
+
+            source.start(0);
+            
+            // Render jadi file
+            const renderedBuffer = await offlineCtx.startRendering();
+            const wavBlob = bufferToWave(renderedBuffer, renderedBuffer.length);
+            const audioUrl = URL.createObjectURL(wavBlob);
+
+            document.getElementById('audio-player').src = audioUrl;
+            document.getElementById('download-link').href = audioUrl;
+            document.getElementById('result-area').style.display = "block";
+
+        } catch (error) {
+            console.error(error);
+            alert("Gagal memproses lagu. Coba file lain bray.");
+        } finally {
+            loadingDiv.style.display = "none";
+            btnProcess.disabled = false;
+        }
+    }
+
+    function bufferToWave(abuffer, len) {
+        let numOfChan = abuffer.numberOfChannels,
+            length = len * numOfChan * 2 + 44,
+            buffer = new ArrayBuffer(length),
+            view = new DataView(buffer),
+            channels = [], i, sample,
+            offset = 0, pos = 0;
+
+        function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+        function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
+
+        setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
+        setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan);
+        setUint32(abuffer.sampleRate); setUint32(abuffer.sampleRate * 2 * numOfChan);
+        setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164);
+        setUint32(length - pos - 4);
+
+        for(i = 0; i < abuffer.numberOfChannels; i++) channels.push(abuffer.getChannelData(i));
+
+        while(pos < length) {
+            for(i = 0; i < numOfChan; i++) {
+                sample = Math.max(-1, Math.min(1, channels[i][offset])); 
+                sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
+                view.setInt16(pos, sample, true); 
+                pos += 2;
+            }
+            offset++;
+        }
+        return new Blob([buffer], {type: "audio/wav"});
+    }
+</script>
+
+</body>
+</html>
